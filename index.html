@@ -81,6 +81,7 @@ button.b[onclick="catView('sin')"]{background:radial-gradient(circle at 30% 30%,
 <button data-v="set" onclick="go('set')"><span>⚙️</span>الإعدادات</button></nav>
 <div id="md"></div>
 
+<div id="boot" style="position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#050b18;color:#fff;font:15px Tahoma,sans-serif"><div style="font-size:44px">🏗️</div><div style="font-weight:700">مخزن أولاد شلبة</div><div id="bootst" style="font-size:12px;color:#8da2c8">جاري التحميل…</div></div>
 <script type="text/plain" id="mainjs">
 const $=s=>document.querySelector(s),L=window.__S;
 const E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -89,6 +90,10 @@ const fmt=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Stri
 const today=()=>fmt(new Date()),nextDay=s=>{const d=new Date(s+'T12:00');d.setDate(d.getDate()+1);return fmt(d)};
 const sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
 let db=JSON.parse(L.getItem('db')||'null')||{u:'admin',p:'123456789',t:'dark',shop:{n:'مخزن اولاد شلبه',ph:'',vat:0,low:10},prods:[],cust:[],sup:[],inv:[],pay:[],ret:[],hold:[],seq:1,lastBk:today(),sh:0};
+// إصلاح قواعد البيانات القديمة أو الناقصة مع الحفاظ على كل البيانات الموجودة
+ db.shop=Object.assign({n:'مخزن اولاد شلبه',ph:'',vat:0,low:10},db.shop||{});
+ ['prods','cust','sup','inv','pay','ret','hold'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[]});
+ if(!Number.isFinite(+db.seq)||+db.seq<1)db.seq=1;
 const save=()=>{db.prods.forEach(p=>{p.qty=Math.round(p.qty*1e6)/1e6;if(p.res)p.res=Math.round(p.res*1e6)/1e6});const s=JSON.stringify(db);try{L.setItem('db',s)}catch(e){Object.keys(L).filter(k=>k.startsWith('bk_')||k=='db_prev').forEach(k=>L.removeItem(k));L.setItem('db',s)}};
 const val=id=>$('#'+id).value;
 let V='cash',cart=[],cf,ps='',rg=1,rd=today(),hq='',sb='c',rv=null,ok=0;
@@ -184,7 +189,7 @@ if(C){await C.writeFile({path:dir+'/'+name,data:j,directory:'DOCUMENTS',encoding
 if(window.cordova&&cordova.file){await new Promise((o,n)=>resolveLocalFileSystemURL(cordova.file.externalRootDirectory,r=>r.getDirectory(dir,{create:true},d=>d.getFile(name,{create:true},f=>f.createWriter(w=>{w.onwriteend=o;w.onerror=n;w.write(new Blob([j]))},n),n),n),n));return 1}}catch(e){}return 0}
 async function backup(day,manual){const j=JSON.stringify(snap(day));try{L.setItem('bk_'+day,j)}catch(e){}
 const r=await toFile(day,j);if(!r&&manual){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));a.download='backup_'+day+'.json';a.click()}return r}
-async function chk(){const t=today();let ch=0;while(db.lastBk<t){await backup(db.lastBk);db.lastBk=nextDay(db.lastBk);ch=1}if(ch)save()}
+async function chk(){const t=today();let ch=0,n=0;while(db.lastBk<t&&n++<3){await backup(db.lastBk);db.lastBk=nextDay(db.lastBk);ch=1}if(db.lastBk<t){db.lastBk=t;ch=1}if(ch)save()}
 setInterval(chk,20000);chk();
 function vRes(){if(rv)return roView(rv);
 const ks=Object.keys(L).filter(k=>k.startsWith('bk_')).sort().reverse();
@@ -623,4 +628,176 @@ const t=setInterval(async()=>{if(!$('#sv')||!_cam){clearInterval(t);stopCam();re
 cv.width=v.videoWidth;cv.height=v.videoHeight;cx.drawImage(v,0,0);let code=null;
 if(BD){try{const r=await BD.detect(cv);if(r[0])code=r[0].rawValue}catch(e){}}
 if(!code){const W=cv.width,H=cv.height;for(let q=.35;q<=.65&&!code;q+=.03){const d=cx.getImageData(0,Math.floor(H*q),W,1).data,g=[];for(let i=0;i<W;i++)g.push((d[i*4]+d[i*4+1]+d[i*4+2])/3);
-const sm=g.map((a,i)=>(g[Math.max(0,i-1)]+a+g[Math.min(W-1,i+1)])/3);l
+const sm=g.map((a,i)=>(g[Math.max(0,i-1)]+a+g[Math.min(W-1,i+1)])/3);let lo=255,hi=0;sm.forEach(a=>{lo=Math.min(lo,a);hi=Math.max(hi,a)});if(hi-lo<50)continue;
+const th=(lo+hi)/2,b=sm.map(a=>a<th?1:0);code=dec(b)||dec(b.slice().reverse())}}
+busy=0;if(code){clearInterval(t);scanGo(code)}},250)}
+/* قارئ الباركود الخارجي (USB/Bluetooth بيكتب كأنه كيبورد) */
+let _kb='',_kt=0;document.addEventListener('keydown',e=>{const t=Date.now();if(t-_kt>100)_kb='';_kt=t;const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))return;
+if(e.key=='Enter'){if(_kb){const v=_kb;_kb='';scanGo(v)}}else if(e.key.length==1)_kb+=e.key});
+$('#app .row').insertAdjacentHTML('beforeend','<button class="b s a" onclick="scanUI()">📷 باركود</button>');
+
+/* --- كشف حساب العميل: يشمل المرتجعات وصافي المسحوبات --- */
+function ledger(id){const c=cust(id),dt=t=>new Date(t).toLocaleString('ar-EG'),st='margin:0;padding:8px',RI=(db.rinv||[]).filter(r=>r.c==id);
+const ic=db.inv.filter(i=>i.c==id).reverse().map(i=>{const rr=sum(RI.filter(r=>r.inv==i.id),r=>r.total);return `<details class="cd" style="${st}"><summary><b>#${i.id}</b> ${i.day}<br><span class="mu">${m(i.tot)} — ${i.t=='cash'?'نقدي':'آجل'}${rr?' — مرتجع '+m(rr):''}</span></summary><div class="mu">🕒 ${dt(i.ts)}</div><table style="width:100%;font-size:12px"><tr><th>المادة</th><th>الكمية</th><th>السعر</th></tr>${i.items.map(x=>`<tr><td>${E(x.n)}</td><td>${x.q} ${E(x.u)}${x.r?' (مرتجع '+x.r+')':''}</td><td>${m(x.pr)}</td></tr>`).join('')}</table><div class="row"><span>الإجمالي</span><b>${m(i.tot)}</b></div><div class="row"><span>المدفوع</span><b>${m(i.paid)}</b></div><div class="row"><span>المتبقي</span><b class="low">${m(i.rem||0)}</b></div><button class="b s" onclick="showInv(${i.id})">عرض الفاتورة</button></details>`}).join('');
+const rc=RI.slice().reverse().map(r=>`<details class="cd" style="${st}"><summary><b>مرتجع ر-${r.no}</b> ${r.day}<br><span class="mu">${m(r.total)} — للفاتورة #${r.inv}</span></summary><div class="mu">🕒 ${dt(r.ts)}</div>${r.items.map(x=>`<div class="row"><span>${E(x.n)} × ${m(x.q)} ${E(x.u)}</span><b>${m(x.v)}</b></div>`).join('')}${r.ap?`<div class="row"><span>خُصم من الدين</span><b>${m(r.ap)}</b></div>`:''}${r.cash?`<div class="row"><span>رُدّ نقداً</span><b>${m(r.cash)}</b></div>`:''}${r.cr?`<div class="row"><span>أُضيف لرصيده</span><b>${m(r.cr)}</b></div>`:''}<button class="b s" onclick="rtnView(${r.id})">عرض فاتورة المرتجع</button></details>`).join('');
+const pc=db.pay.filter(p=>p.c==id).reverse().map(p=>`<details class="cd" style="${st}"><summary><b>دفعة</b> ${p.day}<br><span class="mu">${m(p.amt)}</span></summary><div class="mu">🕒 ${dt(p.ts)}</div><div class="row"><span>المبلغ المسدد</span><b>${m(p.amt)}</b></div></details>`).join('');
+const tin=sum(db.inv.filter(i=>i.c==id),i=>i.tot),trt=sum(RI,r=>r.total),tpy=sum(db.pay.filter(p=>p.c==id),p=>p.amt);
+modal(`<h3>كشف حساب: ${E(c.n)}</h3><div class="row"><span>إجمالي المسحوبات</span><b>${m(tin)}</b></div><div class="row"><span>إجمالي المرتجعات</span><b>${m(trt)}</b></div><div class="row"><span>صافي المسحوبات</span><b>${m(tin-trt)}</b></div><div class="row"><span>دفعات محصّلة</span><b>${m(tpy)}</b></div><div class="row"><span>صافي الدين</span><b class="low">${m(c.bal)}</b></div>${c.cr?`<div class="row"><span>رصيد دائن له</span><b>${m(c.cr)}</b></div>`:''}<div class="mu">تاريخ السداد المخطط</div><input type="date" value="${c.due||''}" onchange="cust(${id}).due=this.value;save();sched()"><div class="lg">${ic+rc+pc||'<p class="mu">لا توجد حركات</p>'}</div>`)}
+
+/* ===== v9: بدون دخول + التقارير مفتوحة + جبس وسن + وحدات التحويل (طن/شكارة) ===== */
+function m3(n){return (+n||0).toLocaleString('en-US',{maximumFractionDigits:3})}
+function unitsOf(k,ch){const t=MT.find(a=>a[0]==k);if(!t)return[{n:ch||'وحدة',f:1}];return[{n:t[4]||ch||t[3][0],f:1}].concat((t[5]||[]).map(([n,c])=>({n,f:1/c})))}
+function qtxt(p,q){q=+q||0;const u=(p.units&&p.units.length)?p.units:[{n:'',f:1}];return m3(q)+' '+u[0].n+u.slice(1).map(x=>' = '+m3(q/x.f)+' '+x.n).join('')}
+function lowQ(p){const u=p.units&&p.units[p.units.length-1];return p.qty/((u&&u.f)||1)<=db.shop.low}
+function eqs(k,v){const u=unitsOf(k,window._mu),q=+v;if(!(q>0)||u.length<2)return '';return 'يعادل '+u.slice(1).map(x=>m3(q/x.f)+' '+x.n).join(' و ')}
+
+/* تحويل البيانات القديمة تلقائياً مرة واحدة إلى وحدات التسجيل الجديدة */
+function migrate(){let ch=0;db.prods.forEach(p=>{if(!p.k||p.mv>=2)return;const t=MT.find(a=>a[0]==p.k);if(!t){p.mv=2;return}
+const old=p.units&&p.units[0]?p.units[0].n:null,base=t[4];let g=1;
+if(base){if(old==base)g=1;else{const al=(t[5]||[]).find(a=>a[0]==old);if(al)g=1/al[1];else if(p.k=='brick'&&old=='عدد')g=1/1000;else g=null}}
+if(g==null){p.mv=2;ch=1;return}
+if(g!=1){p.qty*=g;p.res=(p.res||0)*g;if(p.cost!=null)p.cost/=g;if(p.price)p.price/=g;(p.buys||[]).forEach(b=>{b.q*=g;b.c/=g});
+db.inv.concat(db.canc||[]).forEach(i=>i.items.forEach(x=>{if(x.pid==p.id)x.f*=g}));
+(db.hold||[]).forEach(h=>h.cart.forEach(x=>{if(x.pid==p.id)x.f*=g}));(db.cart||[]).forEach(x=>{if(x.pid==p.id&&!(db.hold||[]).some(h=>h.cart.includes(x)))x.f*=g});
+db.rsv.forEach(r=>{if(r.pid==p.id){r.q*=g;r.drawn*=g;r.price/=g}})}
+if(base)p.units=unitsOf(p.k,base);p.mv=2;ch=1});if(ch)save()}
+
+/* --- المخزن: المربعات وقوائم الأنواع مع المعادل --- */
+function vInv(){const lg=db.prods.filter(p=>!p.k);
+return card('📦 المواد الأساسية','<div class="g2">'+MT.map(([k,n,e])=>{const L=db.prods.filter(p=>p.k==k),a=sum(L,p=>p.qty-(p.res||0)),neg=L.some(p=>p.qty-(p.res||0)<0),bad=neg||L.some(p=>lowQ(p)),u=L[0]?L[0].units[0].n:'';
+return `<button class="b" style="padding:20px 6px;font-size:17px;${L.length?'':'background:#6b7280'}" onclick="catView('${k}')">${e}<br>${n}<br><small style="${bad?'color:#fecaca':''}">${L.length?L.length+' نوع — متاح '+m3(a)+' '+E(u):'اضغط للإضافة'}</small>${neg?'<br>🛑':''}</button>`}).join('')+'</div>')
++'<button class="b a" onclick="rsvDash()">📋 عرض الحجوزات</button>'
++(lg.length?card('منتجات قديمة',lg.map(p=>`<div class="row"><span>${E(p.n)} — ${m(p.qty)}</span><button class="b s r" onclick="pin(()=>delP(${p.id}))">حذف</button></div>`).join('')):'')}
+function catView(k){const t=MT.find(a=>a[0]==k),L=db.prods.filter(p=>p.k==k);
+modal(`<h3>${t[2]} ${t[1]}</h3><button class="b n" onclick="typeForm('${k}')">➕ إضافة نوع جديد</button>`+(L.map(p=>{const a=p.qty-(p.res||0);return `<div class="row" style="cursor:pointer;align-items:flex-start" onclick="typeForm('${k}',${p.id})"><span>${E(p.tn||t[1])}</span><span style="text-align:left">${a<0?`<span onclick="event.stopPropagation();why(${p.id})">🛑</span> `:''}<b class="${(a<0||lowQ(p))?'low':''}">${qtxt(p,a)}</b>${p.res?`<div class="mu">محجوز ${m3(p.res)} ${E(p.units[0].n)}</div>`:''}</span></div>`}).join('')||'<p class="mu">لا توجد أنواع بعد</p>'))}
+function typeForm(k,id){const t=MT.find(a=>a[0]==k),p=id?prod(id):null;window._mu=p?p.units[0].n:t[3][0];const ch=t[3].length>1,bu=unitsOf(k,_mu),alt=bu.slice(1).map(x=>`1 ${bu[0].n} = ${m3(1/x.f)} ${x.n}`).join(' | ');
+modal(`<h3>${t[2]} ${t[1]} — ${p?'تعديل نوع':'نوع جديد'}</h3><input id="tyn" placeholder="اسم النوع (مثال: أسيوط، السويس)" value="${E(p&&p.tn||'')}">`
++(ch?`<div class="mu">وحدة البيع</div><div class="g2">${t[3].map(x=>`<button class="b s ${x==_mu?'':'g'}" onclick="_mu='${x}';[...this.parentNode.children].forEach(b=>b.classList.add('g'));this.classList.remove('g')">${x}</button>`).join('')}</div>`:`<div class="mu">وحدة التسجيل: <b>${E(t[3][0])}</b>${alt?' — '+alt:''}</div>`)
++`<div class="mu">سعر الشراء (التكلفة) لكل ${E(t[4]||'وحدة')} — سري ولا يظهر في الفاتورة</div><input id="mtc" type="number" min="0" step="any" value="${p&&p.cost!=null?p.cost:''}"><div class="mu">الكمية الفعلية بالمخزن${t[4]?' ('+E(t[4])+')':''}</div><input id="mtq" type="number" step="any" value="${p?p.qty:''}" oninput="$('#eqh').textContent=eqs('${k}',this.value)"><div id="eqh" class="mu" style="color:var(--ac);font-weight:700">${p?eqs(k,p.qty):''}</div>
+<button class="b n" onclick="saveType('${k}',${id||0})">حفظ</button>`
++(p?`<h3 style="margin-top:12px">➕ توريد كمية جديدة (يُحسب متوسط التكلفة تلقائياً)</h3><div class="g2"><input id="rsk" type="number" min="0" step="any" placeholder="الكمية${t[4]?' بال'+E(t[4]):''}" oninput="$('#eqr').textContent=eqs('${k}',this.value)"><input id="rsc" type="number" min="0" step="any" placeholder="سعر الشراء${t[4]?' لل'+E(t[4]):''}"></div><div id="eqr" class="mu" style="color:var(--ac);font-weight:700"></div><button class="b a" onclick="restock(${id},'${k}')">توريد</button><button class="b r" onclick="pin(()=>delType(${id},'${k}'))">🗑️ حذف المنتج نهائياً</button>`:'')
++`<button class="b g" onclick="catView('${k}')">↩ رجوع لأنواع ${t[1]}</button>`)}
+function saveType(k,id){const c=val('mtc'),q=val('mtq'),tn=val('tyn').trim(),t=MT.find(a=>a[0]==k),L=db.prods.filter(p=>p.k==k);
+if(c==='')return alert('سعر الشراء إلزامي');if(+c<0)return alert('لا يُسمح بقيم سالبة');if(!tn&&!id&&L.length)return alert('اكتب اسم النوع لتمييزه عن الأنواع الأخرى');if(tn&&L.some(p=>p.id!=id&&p.tn==tn))return alert('هذا النوع موجود بالفعل');
+let p=id?prod(id):null;if(!p){p={id:db.seq++,k,cat:t[1],bc:'',res:0,qty:0,units:[]};db.prods.push(p)}
+p.tn=tn;p.n=t[1]+(tn?' '+tn:'');p.units=unitsOf(k,_mu);p.cost=+c;if(q!=='')p.qty=+q;p.mv=2;save();render();toast('تم الحفظ — '+qtxt(p,p.qty));catView(k)}
+function restock(id,k){const p=prod(id),q=+val('rsk'),c=val('rsc');if(!(q>0)||c===''||+c<0)return alert('أدخل الكمية وسعر الشراء');
+const b=Math.max(p.qty,0);p.cost=p.cost==null?+c:(b*p.cost+q*+c)/(b+q);p.qty+=q;(p.buys=p.buys||[]).push({ts:Date.now(),q,c:+c});db.log.push({ts:Date.now(),k:'توريد',t:`${p.n} × ${m3(q)} ${p.units[0].n} بسعر ${m(+c)}`});save();render();toast('تم التوريد — المخزن الآن '+qtxt(p,p.qty));typeForm(k,id)}
+
+/* --- الكاشير: اختيار الصنف بالمعادل، والوحدة (طن / شكارة) تظهر تلقائياً --- */
+function uo(){const p=prod(val('ps')||0),s=$('#us');if(s)s.innerHTML=p?p.units.map((u,i)=>`<option value="${i}">${E(u.n)}</option>`).join(''):''}
+
+/* --- الحجز بالوحدة المختارة --- */
+function rsvUn(){const p=prod(val('rsp')),s=$('#rsun');if(s)s.innerHTML=p?p.units.map((u,i)=>`<option value="${i}">${E(u.n)}</option>`).join(''):''}
+function rsvForm(cid){modal(`<h3>📌 حجز بضاعة — ${E(cn(cid))}</h3><select id="rsp" onchange="rsvUn()">${db.prods.map(p=>`<option value="${p.id}">${E(p.n)} — متاح ${qtxt(p,p.qty-(p.res||0))}</option>`).join('')}</select><div class="g2"><select id="rsun"></select><input id="rsq" type="number" min="0" step="any" placeholder="الكمية"></div><input id="rsu" type="number" min="0" step="any" placeholder="سعر الوحدة المتفق عليه (للوحدة المختارة)"><div class="mu">تاريخ انتهاء الحجز (إلزامي)</div><input id="rse" type="date"><input id="rsd" type="number" min="0" step="any" placeholder="العربون المدفوع الآن"><select id="rsm"><option value="cash">كاش</option><option value="visa">فيزا</option><option value="net">الشبكة</option><option value="wallet">محفظة</option></select><input id="rsph" type="tel" placeholder="رقم هاتف العميل (اختياري)" value="${E(cust(cid).ph||'')}"><button class="b n" onclick="doRsv(${cid})">تأكيد الحجز</button>`);rsvUn()}
+function doRsv(cid){const p=prod(val('rsp')),un=p&&(p.units[val('rsun')]||p.units[0]),q0=+val('rsq'),e=val('rse'),d=+val('rsd')||0,u0=val('rsu'),ph=val('rsph').trim();
+if(!p||!(q0>0)||u0===''||+u0<0)return alert('أكمل البيانات (الكمية وسعر الوحدة)');if(ph&&!/^[0-9+\s-]{7,}$/.test(ph))return alert('رقم الهاتف غير صحيح — اكتبه صحيحاً أو اتركه فارغاً');if(!e||e<=today())return alert('تاريخ انتهاء الحجز إلزامي ويكون بعد اليوم');
+const q=q0*un.f,pr=+u0/un.f;if(d<0||d>q*pr+1e-6)return alert('العربون لا يزيد عن قيمة الحجز ولا يقل عن صفر');
+const r={id:db.seq++,no:db.rsq=(db.rsq||0)+1,ph,c:cid,pid:p.id,q,drawn:0,exp:e,price:pr,dep:d,used:0,m:val('rsm'),ts:Date.now(),day:today()};p.res=(p.res||0)+q;if(!cust(cid).ph)cust(cid).ph=ph;db.rsv.push(r);
+if(d>0)db.cf.push({id:db.seq++,ts:r.ts,day:r.day,k:'dep',m:r.m,amt:d,ref:r.id});save();sched();cl();toast('تم الحجز كعربون — لا يُحسب مبيعات إلا عند التسليم');rsvView(r.id)}
+
+
+/* ===== v10: مخزن ثابت (حديد بالطن/الكيلو) + بحث وإنشاء عميل بالكاشير + مقاسات الطباعة + تخزين بلا حد ===== */
+function thermal(){return db.tpl.paper=='58'?'58':'80'}
+function unitsOf(k,ch,kg){const t=MT.find(a=>a[0]==k);if(!t)return[{n:ch||'وحدة',f:1}];return[{n:t[4]||ch||t[3][0],f:1}].concat((t[5]||[]).map(([n,c])=>({n,f:1/((k=='steel'&&+kg>0)?+kg:c)})))}
+function eqs(k,v){const kg=$('#kgt')?+val('kgt'):0,u=unitsOf(k,window._mu,kg),q=+v;if(!(q>0)||u.length<2)return '';return 'يعادل '+u.slice(1).map(x=>m3(q/x.f)+' '+x.n).join(' و ')}
+function isLeg(p,t){return !!(p&&t[4]&&p.units&&p.units[0]&&p.units[0].n!=t[4])}
+
+/* تحويل البيانات القديمة (مرة واحدة) + توحيد أسماء الأقسام */
+function migrate(){let ch=0;db.prods.forEach(p=>{if(!p.k)return;const t=MT.find(a=>a[0]==p.k);if(!t)return;
+if(p.cat!=t[1]){p.cat=t[1];p.n=t[1]+(p.tn?' '+p.tn:'');ch=1}
+if(p.mv>=3)return;
+const old=p.units&&p.units[0]?p.units[0].n:null,base=t[4];let g=1;
+if(base){if(old==base)g=1;else{const al=(t[5]||[]).find(a=>a[0]==old);if(al&&p.k!='steel')g=1/al[1];else if(p.k=='brick'&&old=='عدد')g=1/1000;else g=null}}
+if(g==null){p.mv=3;ch=1;return}
+if(g!=1){p.qty*=g;p.res=(p.res||0)*g;if(p.cost!=null)p.cost/=g;if(p.price)p.price/=g;(p.buys||[]).forEach(b=>{b.q*=g;b.c/=g});
+db.inv.concat(db.canc||[]).forEach(i=>i.items.forEach(x=>{if(x.pid==p.id)x.f*=g}));
+(db.hold||[]).forEach(h=>h.cart.forEach(x=>{if(x.pid==p.id)x.f*=g}));(db.cart||[]).forEach(x=>{if(x.pid==p.id&&!(db.hold||[]).some(h=>h.cart.includes(x)))x.f*=g});
+db.rsv.forEach(r=>{if(r.pid==p.id){r.q*=g;r.drawn*=g;r.price/=g}})}
+if(p.k=='steel'&&base&&!p.kg)p.kg=1000;
+if(base)p.units=unitsOf(p.k,base,p.kg);p.mv=3;ch=1});if(ch)save()}
+
+function typeForm(k,id){const t=MT.find(a=>a[0]==k),p=id?prod(id):null,lg=isLeg(p,t);window._mu=p?p.units[0].n:t[3][0];const bu=unitsOf(k,_mu,p&&p.kg,p&&p.bars&&p.barKg?{n:p.bars,k:p.barKg}:null),alt=(k=='steel'&&!(p&&p.kg)?[]:bu.slice(1)).map(x=>`1 ${bu[0].n} = ${m3(1/x.f)} ${x.n}`).join(' | ');
+modal(`<h3>${t[2]} ${t[1]} — ${p?'تعديل نوع':'نوع جديد'}</h3><input id="tyn" placeholder="اسم النوع (مثال: أسيوط، السويس)" value="${E(p&&p.tn||'')}">`
++`<div class="mu">وحدة التسجيل: <b>${E(t[3][0])}</b>${alt?' — '+alt:''}</div>`
++(k=='steel'&&!lg?`<div class="mu">الطن يساوي كم سيخ؟</div><input id="stn" type="number" min="1" step="any" value="${p&&p.bars||''}" placeholder="مثال: 94" oninput="$('#eqh').textContent=eqs('steel',val('mtq'));$('#sth').textContent=stHint()"><div class="mu">السيخ الواحد كام كيلو؟</div><input id="stk" type="number" min="0.001" step="any" value="${p&&p.barKg||''}" placeholder="مثال: 10.65" oninput="$('#eqh').textContent=eqs('steel',val('mtq'));$('#sth').textContent=stHint()"><div id="sth" class="mu" style="color:var(--ac);font-weight:700">${p&&p.bars&&p.barKg?'الطن = '+m3(p.bars)+' سيخ = '+m3(p.bars*p.barKg)+' كيلو':''}</div>`:'')
++(lg?`<div class="ro">هذا النوع مسجّل بوحدة قديمة (${E(p.units[0].n)}) — يبقى كما هو بدون تحويل.</div>`:'')
++`<div class="mu">سعر الشراء (التكلفة) لكل ${E(lg?p.units[0].n:(t[4]||'وحدة'))} — سري ولا يظهر في الفاتورة</div><input id="mtc" type="number" min="0" step="any" value="${p&&p.cost!=null?p.cost:''}"><div class="mu">الكمية الفعلية بالمخزن${t[4]&&!lg?' ('+E(t[4])+')':''}</div><input id="mtq" type="number" step="any" value="${p?p.qty:''}" oninput="$('#eqh').textContent=eqs('${k}',this.value)"><div id="eqh" class="mu" style="color:var(--ac);font-weight:700">${p&&!lg?eqp(p):''}</div>
+<button class="b n" onclick="saveType('${k}',${id||0})">حفظ</button>`
++(p?`<h3 style="margin-top:12px">➕ توريد كمية جديدة (يُحسب متوسط التكلفة تلقائياً)</h3><div class="g2"><input id="rsk" type="number" min="0" step="any" placeholder="الكمية${t[4]&&!lg?' بال'+E(t[4]):''}" oninput="$('#eqr').textContent=eqs('${k}',this.value)"><input id="rsc" type="number" min="0" step="any" placeholder="سعر الشراء${t[4]&&!lg?' لل'+E(t[4]):''}"></div><div id="eqr" class="mu" style="color:var(--ac);font-weight:700"></div><button class="b a" onclick="restock(${id},'${k}')">توريد</button><button class="b r" onclick="pin(()=>delType(${id},'${k}'))">🗑️ حذف المنتج نهائياً</button>`:'')
++`<button class="b g" onclick="catView('${k}')">↩ رجوع لأنواع ${t[1]}</button>`)}
+function saveType(k,id){const c=val('mtc'),q=val('mtq'),tn=val('tyn').trim(),t=MT.find(a=>a[0]==k),L=db.prods.filter(p=>p.k==k),old=id?prod(id):null,lg=isLeg(old,t),st=(k=='steel'&&!lg)?stv():null;
+if(c==='')return alert('سعر الشراء إلزامي');if(+c<0)return alert('لا يُسمح بقيم سالبة');if(k=='steel'&&!lg&&!st)return alert('اكتب: الطن يساوي كم سيخ، والسيخ الواحد كام كيلو');
+if(!tn&&!id&&L.length)return alert('اكتب اسم النوع لتمييزه عن الأنواع الأخرى');if(tn&&L.some(p=>p.id!=id&&p.tn==tn))return alert('هذا النوع موجود بالفعل');
+let p=old;if(!p){p={id:db.seq++,k,cat:t[1],bc:'',res:0,qty:0,units:[]};db.prods.push(p)}
+p.tn=tn;p.n=t[1]+(tn?' '+tn:'');if(!lg){p.units=unitsOf(k,t[3][0],st?st.n*st.k:0,st);if(k=='steel'){p.kg=st.n*st.k;p.bars=st.n;p.barKg=st.k}}p.cost=+c;if(q!=='')p.qty=+q;p.mv=3;save();render();toast('تم الحفظ — '+qtxt(p,p.qty));catView(k)}
+
+/* --- الكاشير: بحث عن العميل بالاسم + إنشاء عميل --- */
+function custPick(){const c=cust(cf.c);
+if(c)return `<div class="row" style="border:1px solid var(--bd);border-radius:14px;padding:8px 12px;margin-bottom:10px"><span>👤 <b>${E(c.n)}</b> <span class="mu">${E(c.ph||'')}</span>${c.bal>0?` <span class="tag">دين ${m(c.bal)}</span>`:''}</span><button class="b s r" onclick="cf.c='';render()">✕</button></div>`;
+return `<input id="csq" placeholder="🔍 ابحث عن عميل بالاسم أو الهاتف (اختياري للنقدي)" oninput="csrch(this.value)" autocomplete="off"><div id="csr"></div>`}
+function csrch(q){q=(q||'').trim();const e=$('#csr');if(!e)return;if(!q){e.innerHTML='';return}
+const L=db.cust.filter(c=>(c.n+' '+(c.ph||'')).includes(q)).slice(0,6);
+e.innerHTML=L.map(c=>`<div class="row" style="cursor:pointer" onclick="pickCust(${c.id})"><span>👤 ${E(c.n)} <span class="mu">${E(c.ph||'')}</span></span><b class="${c.bal>0?'low':''}">${c.bal>0?m(c.bal):''}</b></div>`).join('')
++`<div class="row" style="cursor:pointer;color:var(--ac);font-weight:700" data-q="${E(q)}" onclick="newCust(this.dataset.q)">➕ إنشاء عميل جديد «${E(q)}»</div>`}
+function pickCust(id){cf.c=id;cf.ph=(cust(id)||{}).ph||cf.ph||'';render()}
+function newCust(nm){modal(`<h3>➕ عميل جديد</h3><input id="ncn" placeholder="اسم العميل" value="${E(nm||'')}"><input id="ncp" type="tel" placeholder="رقم الهاتف (اختياري)" value="${E(cf.ph||'')}"><input id="nca" placeholder="العنوان (اختياري)"><button class="b n" onclick="saveNewCust()">حفظ واختيار العميل</button>`)}
+function saveNewCust(){const n=val('ncn').trim(),ph=val('ncp').trim();if(!n)return alert('اكتب اسم العميل');if(ph&&!/^[0-9+\s-]{7,}$/.test(ph))return alert('رقم الهاتف غير صحيح');
+if(db.cust.find(c=>c.n==n)&&!confirm('يوجد عميل بنفس الاسم «'+n+'». إنشاء عميل جديد بنفس الاسم؟'))return;
+const c={id:db.seq++,n,ph,ad:val('nca').trim(),bal:0};db.cust.push(c);cf.c=c.id;cf.ph=ph||cf.ph||'';save();cl();render();toast('تمت إضافة العميل وسيظهر في الحسابات')}
+
+/* --- الطباعة: مقاسات 58 / 80 / A5 / A4 --- */
+function sampleInv(){return db.inv[db.inv.length-1]||{id:1,ts:Date.now(),c:'',t:'cash',items:[{n:'أسمنت',u:'شكارة',q:10,pr:95,r:0}],s:950,d:0,v:0,fee:0,tot:950,paid:950}}
+
+/* --- الشعار: تصغير تلقائي --- */
+function logo(f){if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,500/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*k));c.height=Math.max(1,Math.round(im.height*k));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);db.tpl.logo=c.toDataURL('image/jpeg',.85);save();ldLogo(pvw)};im.onerror=()=>{db.tpl.logo=r.result;save();ldLogo(pvw)};im.src=r.result};r.readAsDataURL(f)}
+
+
+/* ===== v11: الحديد — الطن = كم سيخ، والسيخ = كم كيلو (يحددها التاجر) ===== */
+function unitsOf(k,ch,kg,st){const t=MT.find(a=>a[0]==k);if(!t)return[{n:ch||'وحدة',f:1}];const b=[{n:t[4]||ch||t[3][0],f:1}];
+if(k=='steel'){if(st&&st.n>0&&st.k>0)return b.concat([{n:'سيخ',f:1/st.n},{n:'كيلو',f:1/(st.n*st.k)}]);if(+kg>0)return b.concat([{n:'كيلو',f:1/+kg}]);return b}
+return b.concat((t[5]||[]).map(([n,c])=>({n,f:1/c})))}
+function stv(){const n=+(($('#stn')||{}).value),k=+(($('#stk')||{}).value);return(n>0&&k>0)?{n,k}:null}
+function stHint(){const s=stv();return s?'الطن = '+m3(s.n)+' سيخ = '+m3(s.n*s.k)+' كيلو':''}
+function eqs(k,v){const st=k=='steel'?stv():null;if(k=='steel'&&!st)return '';const u=unitsOf(k,window._mu,0,st),q=+v;if(!(q>0)||u.length<2)return '';return 'يعادل '+u.slice(1).map(x=>m3(q/x.f)+' '+x.n).join(' و ')}
+function eqp(p){if(!p.units||p.units.length<2)return '';return 'يعادل '+p.units.slice(1).map(x=>m3(p.qty/x.f)+' '+x.n).join(' و ')}
+migrate();render();
+try{var _bt=document.getElementById('boot');if(_bt)_bt.remove()}catch(e){}
+</script>
+<script>
+(function(){
+var S={},q={},timer=null,dbp=null,ls=false;
+function def(n,f){Object.defineProperty(S,n,{value:f,enumerable:false})}
+function step(t){try{var e=document.getElementById('bootst');if(e)e.textContent=t}catch(x){}}
+function banner(t){try{var bt=document.getElementById('boot');if(bt)bt.remove();var d=document.getElementById('errbn');if(!d){d=document.createElement('div');d.id='errbn';d.style.cssText='position:fixed;left:8px;right:8px;bottom:96px;z-index:99999;background:#7f1d1d;color:#fff;padding:10px 12px;border-radius:12px;font:12px/1.5 monospace;direction:ltr;text-align:left;max-height:35vh;overflow:auto;white-space:pre-wrap';document.body.appendChild(d)}d.textContent+=t+'\n'}catch(e){}}
+window.addEventListener('error',function(e){banner('JS error: '+e.message+' @'+(e.lineno||'?'))});
+window.addEventListener('unhandledrejection',function(e){banner('Promise error: '+(e.reason&&e.reason.message||e.reason))});
+function openDb(){return new Promise(function(res,rej){try{var r=indexedDB.open('shalaba-store',1);r.onupgradeneeded=function(){r.result.createObjectStore('kv')};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)};r.onblocked=function(){rej(new Error('blocked'))}}catch(e){rej(e)}})}
+function readAll(d){return new Promise(function(res,rej){var o={},c=d.transaction('kv','readonly').objectStore('kv').openCursor();c.onsuccess=function(){var u=c.result;if(u){o[u.key]=u.value;u.continue()}else res(o)};c.onerror=function(){rej(c.error)}})}
+function flush(){timer=null;var keys=Object.keys(q);if(!keys.length)return;var b=q;q={};
+if(ls||!dbp){keys.forEach(function(k){try{if(b[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,b[k])}catch(e){}});return}
+try{var tx=dbp.transaction('kv','readwrite'),st=tx.objectStore('kv');keys.forEach(function(k){if(b[k]===null)st.delete(k);else st.put(b[k],k)});
+tx.onerror=tx.onabort=function(){keys.forEach(function(k){if(!(k in q))q[k]=b[k]});banner('تعذر حفظ البيانات، جارٍ إعادة المحاولة');if(!timer)timer=setTimeout(flush,2000)}}catch(e){keys.forEach(function(k){if(!(k in q))q[k]=b[k]});banner('Storage: '+e.message)}}
+function sched(){if(!timer)timer=setTimeout(flush,60)}
+def('getItem',function(k){return Object.prototype.hasOwnProperty.call(S,k)?S[k]:null});
+def('setItem',function(k,v){S[k]=String(v);q[k]=S[k];sched()});
+def('removeItem',function(k){delete S[k];q[k]=null;sched()});
+window.__S=S;
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')flush()});
+window.addEventListener('pagehide',flush);
+var started=false;
+function start(){if(started)return;started=true;step('2/2 تشغيل البرنامج…');setTimeout(function(){try{var s=document.createElement('script');s.textContent=document.getElementById('mainjs').textContent;document.body.appendChild(s)}catch(e){banner('Start: '+e.message)}},30)}
+function loadLS(){ls=true;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);S[k]=localStorage.getItem(k)}}catch(x){}}
+var tmo=setTimeout(function(){if(!started){loadLS();banner('التخزين المتقدم لا يستجيب — تم التشغيل بالتخزين العادي');start()}},3500);
+step('1/2 فتح التخزين…');
+function fromLS(){var n=0;try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k==='db'||k==='db_prev'||k.indexOf('bk_')===0){S[k]=localStorage.getItem(k);q[k]=S[k];n++}}}catch(e){}return n}
+openDb().then(function(d){dbp=d;return readAll(d)}).then(function(all){
+ if(started)return;clearTimeout(tmo);for(var k in all)S[k]=all[k];
+ if(!Object.prototype.hasOwnProperty.call(S,'db')){var copied=fromLS();if(copied){flush();}}
+ try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+ start();
+ /* حذف النسخة القديمة من localStorage بعد التأكد من الحفظ */
+ setTimeout(function(){try{if(dbp){var r=dbp.transaction('kv','readonly').objectStore('kv').get('db');r.onsuccess=function(){if(r.result){var del=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k==='db'||k==='db_prev'||k.indexOf('bk_')===0)del.push(k)}del.forEach(function(k){localStorage.removeItem(k)})}}}}catch(e){}},3000);
+}).catch(function(e){if(started)return;clearTimeout(tmo);loadLS();banner('IndexedDB غير متاح — تم استخدام التخزين العادي ('+(e&&e.message)+')');start()});
+})();
+</script></body></html>
